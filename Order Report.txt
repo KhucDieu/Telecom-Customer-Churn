@@ -1,0 +1,204 @@
+--1. Update dữ liệu bảng order_datx:
+---1.1.Xóa thông tin cũ trong bảng order_datx
+--drop table order_datx 
+
+
+---1.2. Tạo bảng order_datx
+CREATE TABLE order_datx AS
+SELECT *
+FROM staging."OrderMng_Order" omo;
+
+--2. Thêm các cột dữ liệu trong order_datx
+-- Thêm cột display_name vào trong bảng orders_datx
+ALTER TABLE order_datx
+Add column display_name VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN department VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN depart_total VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN ctv_flag VARCHAR(255);
+
+ALTER TABLE order_datx 
+ADD COLUMN partner_flag VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN phong_ban VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN quan_ly VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN phong_ban_gopttkd VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN trungtam_KD VARCHAR(255);
+
+ALTER TABLE order_datx
+ADD COLUMN currentPeriodEnd TIMESTAMP
+
+--3. Update dữ liệu các cột thông tin ngoài bảng OrderMng_Order
+---3.1.display_name
+-- Update display_name vào trong bảng orders_datx
+UPDATE order_datx 
+SET display_name = dwh.users_datx.display_name 
+FROM dwh.users_datx
+WHERE order_datx.cus_name  = dwh.users_datx.full_name and order_datx.cus_email  = dwh.users_datx.email  ;
+
+---3.2.department
+UPDATE order_datx
+SET department = 
+    CASE 
+        WHEN display_name IN ('partner', 'marketing', 'Academy','TP Marketing') THEN display_name
+        WHEN display_name IS NULL THEN 'Organic'
+        ELSE display_name
+    END;
+
+---3.3.depart_total
+UPDATE order_datx
+SET depart_total = 
+  CASE
+    WHEN department IN ('partner') THEN 'Partner'
+    WHEN department IN ('accountant') THEN 'Accountant'
+    WHEN department IN ('admin') THEN 'Admin'
+    WHEN department IN ('gdkd', 'business development executive', 'Senior Digital Business Development', 'Sales Manager') THEN 'Business Development'
+    WHEN department IN ('Organic') THEN 'Organic'
+    WHEN department IN ('ctv') THEN 'CTV'
+    WHEN department IN ('bod_qtrr_quanly', 'bod') THEN 'BOD'
+    WHEN department IN ('customer service', 'customer services executive', 'Head of Customer Experience', 'cs mananger') THEN 'Customer Service'
+    WHEN department IN ('DATX Academy','Academy') THEN 'Academy'
+    WHEN department IN ('hr') THEN 'Human Resource'
+    WHEN department IN ('datxmember') THEN 'DATX member'
+    WHEN department IN ('marketing', 'DATX Marketing', 'Lê Huyền Giang','TP Marketing') THEN 'Marketing'
+    WHEN department IN ('op') THEN 'CS & Vận hành saleportal'
+    WHEN department IN ('sales manager') THEN 'NVKD'
+    WHEN department IN ('tp chiến lược') THEN 'Business Strategy'
+    WHEN department IN ('senior digital business development') THEN 'Phòng KDS'
+	ELSE depart_total
+  END;
+
+---3.4.ctv_flag
+-- Cập cột ctv_flag vào bảng order_datx
+UPDATE order_datx
+SET ctv_flag = 
+    CASE 
+        WHEN display_name IN ('ctv') THEN '1'
+        ELSE '0'
+    END
+WHERE display_name IS NOT NULL;
+
+
+---3.5.partner_flag
+--- Thêm cột partner_flag vào bảng order_datx
+UPDATE order_datx
+SET partner_flag = 
+    CASE 
+        WHEN display_name = 'partner' THEN '1'
+        ELSE '0'
+    END
+WHERE display_name IS NOT NULL;
+
+---3.6.quan_ly
+--Update thông tin quan_ly vào bảng order_datx
+UPDATE order_datx
+SET quan_ly = dwh.ctv_datx."Người quản lý" 
+from ctv_datx 
+WHERE dwh.order_datx.seller_name =dwh.ctv_datx.tên  ;
+
+---3.7.phong_ban
+--Update thông tin phong_ban vào bảng order_datx
+UPDATE order_datx 
+SET phong_ban = dwh.ctv_datx."Phòng KD" 
+from ctv_datx 
+WHERE dwh.order_datx.seller_name =dwh.ctv_datx.tên;
+
+
+UPDATE order_datx  
+SET phong_ban = depart_total
+WHERE phong_ban is null  ;
+
+---3.8.phong_ban_gopttkd
+ALTER TABLE order_datx
+ADD COLUMN phong_ban_gopttkd VARCHAR(255);
+
+UPDATE order_datx
+SET phong_ban_gopttkd = dwh.users_datx.phong_ban_gopttkd
+FROM dwh.dwh.users_datx 
+where order_datx.seller_name  = dwh.users_datx.member_name ;
+
+UPDATE order_datx
+SET phong_ban_gopttkd = 
+  CASE
+    WHEN order_datx.seller_name  = dwh.users_datx.member_name  THEN dwh.users_datx.phong_ban_gopttkd
+    when order_datx.phong_ban_gopttkd is null then order_datx.phong_ban 
+    ELSE order_datx.phong_ban_gopttkd
+  END
+FROM dwh.dwh.users_datx 
+where order_datx.seller_name  = dwh.users_datx.member_name
+or order_datx.phong_ban_gopttkd is null ;
+
+
+---3.9.trungtam_KD
+--Update thông tin trungtam_KD vào bảng order_datx
+UPDATE order_datx
+SET trungtam_KD = 
+  CASE
+    WHEN dwh.order_datx.seller_name = dwh.ctv_datx.tên THEN dwh.ctv_datx."TT KD"
+    WHEN order_datx.quan_ly IS NULL THEN order_datx.depart_total
+    WHEN order_datx.quan_ly IN ('Academy', 'DATX Academy')or seller_name='DATX Academy' THEN 'Academy'
+    ELSE order_datx.trungtam_KD
+  END
+FROM dwh.ctv_datx
+WHERE dwh.order_datx.seller_name = dwh.ctv_datx.tên
+or order_datx.quan_ly IN ('Academy', 'DATX Academy')or seller_name='DATX Academy'
+   OR quan_ly IS NULL;
+
+--Update thông tin trungtam_KD theo phong_ban_gopttkd
+UPDATE order_datx
+SET trungtam_KD = 
+  CASE
+    WHEN trungtam_KD in ('DATX member','Business Development') THEN phong_ban_gopttkd 
+    WHEN trungtam_KD in ('Academy','DATX Academy') or seller_name='DATX Academy' THEN 'DATX Academy'
+    WHEN trungtam_KD in ('Accountant','Finance & Accounting (Phòng Tài chính Kế toán)') THEN 'Finance & Accounting (Phòng Tài chính Kế toán)'
+    ELSE trungtam_KD
+  END
+WHERE trungtam_KD in ('DATX member','Business Development')
+or trungtam_KD in ('Academy','DATX Academy') or seller_name='DATX Academy'
+or trungtam_KD in ('Accountant','Finance & Accounting (Phòng Tài chính Kế toán)');
+
+---3.10.currentPeriodEnd
+--Update thông tin currentPeriodEnd vào bảng order_datx
+UPDATE order_datx  
+SET currentPeriodEnd = dwh.subscriptions_datx."currentPeriodEnd" 
+from subscriptions_datx
+where dwh.order_datx.id = dwh.subscriptions_datx."orderId"  ;
+
+
+--IV. Tính toán số liệu
+---4.1. Tính PAUs và Doanh thu
+-- drop table dwh.dwh.paus_revenue
+
+create table paus_revenue as
+SELECT DATE_TRUNC('month', "createdAt") AS month,
+    trungtam_KD,phong_ban,quan_ly,
+    COUNT(DISTINCT cus_id) AS PAUs,
+    SUM(order_datx."grandTotal") AS Revenue,
+    COUNT(DISTINCT CASE WHEN seller_name IS NULL OR seller_name = 'DATX Marketing' THEN cus_id ELSE NULL END) AS PAUs_MKT,
+    SUM(CASE WHEN seller_name IS NULL OR seller_name = 'DATX Marketing' THEN order_datx."grandTotal" ELSE 0 END) AS Revenue_MKT,
+    COUNT(distinct CASE WHEN ctv_flag = '1' THEN cus_id ELSE NULL END) AS PAUs_CTV,
+    SUM(CASE WHEN ctv_flag = '1' THEN order_datx."grandTotal" ELSE NULL END) AS Revenue_CTV,
+    COUNT(distinct CASE WHEN partner_flag = '1' THEN cus_id ELSE NULL END) AS PAUs_ĐT,
+    SUM(CASE WHEN partner_flag = '1' THEN order_datx."grandTotal" ELSE NULL END) AS Revenue_ĐT
+FROM  order_datx
+WHERE order_datx."grandTotal" > 0 and order_datx."paymentState" ='paid'  and order_datx."state" ='complete'
+GROUP BY month,trungtam_KD,phong_ban,quan_ly
+ORDER BY month,trungtam_KD,phong_ban,quan_ly;
+
+select distinct phong_ban_gopttkd
+from order_datx od
+
+
+
